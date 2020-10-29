@@ -5,22 +5,22 @@ PLAYER1 = 1
 PLAYER2 = 2
 
 
-def get_coord(row, col):
+def get_coord(col, row):
     """
     helper function to query the board matrix
 
-    row: 0-5 inclusive
     col: 0-6 inclusive
+    row: 0-5 inclusive
 
-    example usage: board.to_matrix()[get_coord(row=0, col=0)]
+    example usage: board.to_matrix()[get_coord(col=0, row=0)]
     useful in-case e.g. the layout of the matrix is changed later, converted to an array, etc
     """
-    return row, col
+    return col, row
 
 
 class GameBoard:
 
-    def __init__(self, board_matrix=None):
+    def __init__(self, board_array=None):
         # low 49 used bits to represent the board state (42+7 for sentinel row)
         # we need the sentinel row for bitwise O(1) four-in-a-row checking
         # all it does is delimit each column in the mask with a zero bit
@@ -40,16 +40,17 @@ class GameBoard:
         # fallen piece should go
         self.next_slot_index = [0, 7, 14, 21, 28, 35, 42]
 
-        if board_matrix is not None:
-            for col in range(7):
-                for row in range(6):
-                    bit = 1 << (col*7 + row)
-                    board_value = board_matrix[row, col]
-                    if board_value == 0:
-                        continue  # the slot is not occupied
-                    self.player2_state_diff |= bit  # state diff bit is always set for occupied slots
-                    if board_value == 1:
-                        self.player1_state |= bit
+        if board_array is not None:
+            for i in range(42):
+                col = i // 6
+                row = i % 6
+                board_value = board_array[i]
+                if board_value == 0:
+                    continue  # the slot is not occupied
+                bit = 1 << (col * 7 + row)
+                self.player2_state_diff |= bit  # state diff bit is always set for occupied slots
+                if board_value == 1:
+                    self.player1_state |= bit
 
     def _get_state(self, player):
         return self.player1_state if player == 1 else self.player1_state ^ self.player2_state_diff
@@ -116,29 +117,35 @@ class GameBoard:
                 cols.append(col)
         return cols
 
+    def to_array(self):
+        array = np.zeros(42)
+        for i in range(42):
+            col = i // 6
+            row = i % 6
+            shift = col * 7 + row
+            if (self._get_state(1) >> shift) & 1:
+                array[i] = 1
+            elif (self._get_state(2) >> shift) & 1:
+                array[i] = 2
+        return array
+
     def to_matrix(self):
         """
+        dim1 is columns
+        dim2 is rows
+        matrix(7, 6)
+
         0,0 is the bottom-left corner
-        5,6 is the top-right corner
+        6,5 is the top-right corner
 
         0 = unoccupied
         1 = player1
         2 = player2
         """
-        matrix = np.zeros((6, 7))
+        return self.to_array().reshape((7, 6))
 
-        for row in range(6):
-            for col in range(7):
-                shift = col*7 + row
-                if (self._get_state(1) >> shift) & 1:
-                    matrix[row, col] = 1
-                elif (self._get_state(2) >> shift) & 1:
-                    matrix[row, col] = 2
-
-        return matrix
-
-    def get_value_at(self, row, col):
-        return self.to_matrix()[get_coord(row, col)]
+    def get_value_at(self, col, row):
+        return self.to_matrix()[get_coord(col=col, row=row)]
 
     def print(self, cls=False):
         if cls:
@@ -148,10 +155,10 @@ class GameBoard:
     def __str__(self):
         matrix = self.to_matrix()
         output = ""
-        for row in range(matrix.shape[0]-1, -1, -1):  # top to bottom (5->0)
+        for row in range(matrix.shape[1]-1, -1, -1):  # top to bottom (5->0)
             if len(output) > 0:
                 output += "\n"
-            for col in range(matrix.shape[1]):  # left to right (0->6)
-                val = matrix[row, col]
+            for col in range(matrix.shape[0]):  # left to right (0->6)
+                val = matrix[col, row]
                 output += "_" if val == 0 else "1" if val == 1 else "2"
         return output
