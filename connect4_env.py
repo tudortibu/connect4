@@ -5,7 +5,7 @@ import numpy as np
 class Connect4(object):
 
     def __init__(self, board=None, player=1):
-        self.boards = {1:0, 2:0}
+        self.boards = {1:0, -1:0}
         self.history = []
         if board is None:
             self.counter = 0
@@ -51,7 +51,7 @@ class Connect4(object):
 
             mask += '0'
             position += '0'
-            temp = []
+            temp = [6]
 
             for i in range(0, 6):
                 mask += ['0', '1'][board[i, j] != 0]
@@ -80,11 +80,11 @@ class Connect4(object):
 
         board = np.zeros(49)
 
-        for i in range(len( p1_fill)):
+        for i in range(len(p1_fill)):
             if p1_fill[i] == '1':
                 board[i] = 1
 
-        for i in range(len( p2_fill)):
+        for i in range(len(p2_fill)):
             if p2_fill[i] == '1':
                 board[i] = 2
         return board
@@ -108,9 +108,9 @@ class Connect4(object):
             for j in range(0, 7):
                 val = j*7 + i
 
-                if board[val] == 1 :
+                if board[val] == 1:
                     string += "o" + " "
-                elif board[val] == 2 :
+                elif board[val] == 2:
                     string += "x" + " "
                 else:
                     string += "_" + " "
@@ -120,7 +120,7 @@ class Connect4(object):
 
 def main():
     c = Connect4()
-    while len(c.list_moves()) > 0 :
+    while len(c.list_moves()) > 0:
         s = r.choice(c.list_moves())
         c.make_move(s)
         c.print_grid_pretty()
