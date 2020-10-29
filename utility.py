@@ -128,12 +128,15 @@ def rotate_kaggle_data(csv_path, out_path, key, label_col='class'):
 
     data = np.loadtxt(csv_path, delimiter=',', skiprows=1)
 
-    print(data)
+    #print(data)
     data_copy = data.copy()
 
-    for i in range(42):
-        data_copy[i] = data[key[i]]
-
+    for i in  range(data.shape[0]):
+        for j in range (42):
+            jj = key[j]
+            data_copy[i][j] = data[i][jj]
+        data_copy[i][42] = data[i][42]
+    #print(data_copy)
     np.savetxt(out_path, data_copy, fmt='%i', delimiter=',', header=h, comments='')
     return
 
@@ -147,7 +150,7 @@ kaggle_key = { 0:35, 1:28, 2:21, 3:14, 4:7, 5:0,
                36:41, 37:34, 38:27, 39:20, 40:13, 41:6
              }
 
-file = "Connect4_Data/All_Moves/connect-4-clean.csv"
-out_file = "Connect4_Data/All_Moves/connect-4-losing.csv"
-class_filtered_dataset(file, out_file, filter_key=-1)
+file = "Connect4_Data/All_Moves/c4_game_database.csv"
+out_file = "Connect4_Data/All_Moves/connect-4-clean.csv"
+rotate_kaggle_data(file, out_file, kaggle_key)
 """

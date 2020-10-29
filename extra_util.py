@@ -21,8 +21,8 @@ def get_endgame_boards(csv_path, out_path, filter_key, label_col='class'):
     for line in data:
         b = line[:42].reshape((6,7))
         print(b)
-        board = c4.Connect4(b)
-        if board.is_win(filter_key):
+        board = c4.GameBoard(b)
+        if board.has_won(filter_key):
             lst.append(True)
         else:
             lst.append(False)
@@ -33,8 +33,37 @@ def get_endgame_boards(csv_path, out_path, filter_key, label_col='class'):
     np.savetxt(out_path, data_copy, fmt='%i', delimiter=',', header=h, comments='')
     return
 
-file = "Connect4_Data/All_Moves/connect-4-win.csv"
-out_file = "Connect4_Data/All_Moves/connect-4-clean-won.csv"
-key = 1
-get_endgame_boards(file, out_file, key)
+def print_data_boards(csv_path, label_col='class'):
+    # Validate label_col argument
+    allowed_label_cols = 'class'
+    if label_col not in allowed_label_cols:
+        raise ValueError('Invalid label_col: {} (expected {})'
+                         .format(label_col, allowed_label_cols))
+
+    # Load headers
+    with open(csv_path, 'r') as csv_fh:
+        h = csv_fh.readline().strip()
+        headers = h.split(',')
+
+    data = np.loadtxt(csv_path, delimiter=',', skiprows=1)
+
+
+    for line in data:
+        print(line[:42])
+        b = line[:42].reshape((7,6))
+        print(b)
+        bb = np.rot90(b)
+        print(bb)
+        bb = np.rot90(bb)
+        print(bb)
+        bb = np.rot90(bb)
+        print(bb)
+        board = c4.GameBoard(bb)
+        print(board)
+        print()
+
+
+    return
+
+print_data_boards("D:\School\Fall 2020\CPS803\Project\Connect4\Connect4_Data\All_Moves\connect-4-clean.csv")
 
