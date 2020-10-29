@@ -2,7 +2,7 @@ import random
 import unittest
 import numpy as np
 
-from connect4_env import GameBoard
+from connect4_env import GameBoard, get_coord
 
 
 class TestGameBoard(unittest.TestCase):
@@ -12,6 +12,19 @@ class TestGameBoard(unittest.TestCase):
         while len(board.get_available_columns()) > 0 and board.get_winner() is None:
             board.make_move(random.choice(board.get_available_columns()))
             board.print()
+
+    def test_init(self):
+        board_matrix = np.zeros((6, 7))
+        board_matrix[get_coord(0, 0)] = 1
+        board_matrix[get_coord(0, 1)] = 2
+        board_matrix[get_coord(1, 0)] = 1
+        board_matrix[get_coord(1, 1)] = 2
+        board_matrix[get_coord(2, 0)] = 1
+        board_matrix[get_coord(3, 0)] = 2
+        board_matrix[get_coord(2, 1)] = 2
+
+        board = GameBoard(board_matrix)
+        self.assertTrue(np.array_equal(board.to_matrix(), board_matrix))
 
     def test_connect_4a(self):
         board = GameBoard()
@@ -34,20 +47,20 @@ class TestGameBoard(unittest.TestCase):
         board.make_move(5)
         board.make_move(2)
         board.make_move(3)
-        matrix[5, 2] = 1
-        matrix[5, 5] = 2
-        matrix[4, 2] = 1
-        matrix[5, 3] = 2
+        matrix[get_coord(0, 2)] = 1
+        matrix[get_coord(0, 5)] = 2
+        matrix[get_coord(1, 2)] = 1
+        matrix[get_coord(0, 3)] = 2
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
 
         board.undo_move()  # undo player2 move
-        matrix[5, 3] = 0
+        matrix[get_coord(0, 3)] = 0
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
 
         board.undo_move()  # undo player1 move
-        matrix[4, 2] = 0
+        matrix[get_coord(1, 2)] = 0
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
 
         board.make_move(0)  # player1 move again
-        matrix[5, 0] = 1
+        matrix[get_coord(0, 0)] = 1
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))

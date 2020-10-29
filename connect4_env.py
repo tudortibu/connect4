@@ -5,6 +5,19 @@ PLAYER1 = 1
 PLAYER2 = 2
 
 
+def get_coord(row, col):
+    """
+    helper function to query the board matrix
+
+    row: 0-5 inclusive
+    col: 0-6 inclusive
+
+    example usage: board.to_matrix()[get_coord(row=0, col=0)]
+    useful in-case e.g. the layout of the matrix is changed later, converted to an array, etc
+    """
+    return row, col
+
+
 class GameBoard:
 
     def __init__(self, board_matrix=None):
@@ -105,8 +118,8 @@ class GameBoard:
 
     def to_matrix(self):
         """
-        value at 0,0 would be top-left corner
-        value at 5,6 would be bottom-right corner
+        0,0 is the bottom-left corner
+        5,6 is the top-right corner
 
         0 = unoccupied
         1 = player1
@@ -116,13 +129,16 @@ class GameBoard:
 
         for row in range(6):
             for col in range(7):
-                shift = col*7 + (5-row)
+                shift = col*7 + row
                 if (self._get_state(1) >> shift) & 1:
                     matrix[row, col] = 1
                 elif (self._get_state(2) >> shift) & 1:
                     matrix[row, col] = 2
 
         return matrix
+
+    def get_value_at(self, row, col):
+        return self.to_matrix()[get_coord(row, col)]
 
     def print(self, cls=False):
         if cls:
@@ -132,10 +148,10 @@ class GameBoard:
     def __str__(self):
         matrix = self.to_matrix()
         output = ""
-        for row in range(matrix.shape[0]):
+        for row in range(matrix.shape[0]-1, -1, -1):  # top to bottom (5->0)
             if len(output) > 0:
                 output += "\n"
-            for col in range(matrix.shape[1]):
+            for col in range(matrix.shape[1]):  # left to right (0->6)
                 val = matrix[row, col]
                 output += "_" if val == 0 else "1" if val == 1 else "2"
         return output
