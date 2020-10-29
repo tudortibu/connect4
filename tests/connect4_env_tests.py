@@ -14,16 +14,16 @@ class TestGameBoard(unittest.TestCase):
             board.print()
 
     def test_init(self):
-        board_matrix = np.zeros((6, 7))
-        board_matrix[get_coord(0, 0)] = 1
-        board_matrix[get_coord(0, 1)] = 2
-        board_matrix[get_coord(1, 0)] = 1
-        board_matrix[get_coord(1, 1)] = 2
-        board_matrix[get_coord(2, 0)] = 1
-        board_matrix[get_coord(3, 0)] = 2
-        board_matrix[get_coord(2, 1)] = 2
+        board_matrix = np.zeros((7, 6))
+        board_matrix[get_coord(col=0, row=0)] = 1
+        board_matrix[get_coord(col=1, row=0)] = 2
+        board_matrix[get_coord(col=0, row=1)] = 1
+        board_matrix[get_coord(col=1, row=1)] = 2
+        board_matrix[get_coord(col=0, row=2)] = 1
+        board_matrix[get_coord(col=0, row=3)] = 2
+        board_matrix[get_coord(col=1, row=2)] = 2
 
-        board = GameBoard(board_matrix)
+        board = GameBoard(board_matrix.flatten())
         self.assertTrue(np.array_equal(board.to_matrix(), board_matrix))
 
     def test_connect_4a(self):
@@ -41,26 +41,26 @@ class TestGameBoard(unittest.TestCase):
         board = GameBoard()
 
         matrix = board.to_matrix()
-        self.assertTrue(np.array_equal(matrix, np.zeros((6, 7))))
+        self.assertTrue(np.array_equal(matrix, np.zeros((7, 6))))
 
         board.make_move(2)
         board.make_move(5)
         board.make_move(2)
         board.make_move(3)
-        matrix[get_coord(0, 2)] = 1
-        matrix[get_coord(0, 5)] = 2
-        matrix[get_coord(1, 2)] = 1
-        matrix[get_coord(0, 3)] = 2
+        matrix[get_coord(col=2, row=0)] = 1
+        matrix[get_coord(col=5, row=0)] = 2
+        matrix[get_coord(col=2, row=1)] = 1
+        matrix[get_coord(col=3, row=0)] = 2
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
 
         board.undo_move()  # undo player2 move
-        matrix[get_coord(0, 3)] = 0
+        matrix[get_coord(col=3, row=0)] = 0
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
 
         board.undo_move()  # undo player1 move
-        matrix[get_coord(1, 2)] = 0
+        matrix[get_coord(col=2, row=1)] = 0
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
 
         board.make_move(0)  # player1 move again
-        matrix[get_coord(0, 0)] = 1
+        matrix[get_coord(col=0, row=0)] = 1
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
