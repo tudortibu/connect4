@@ -1,57 +1,48 @@
-from connect4_env import Connect4
+from connect4_env import GameBoard
 import random as r
 
 
 def main():
-    exit_state = False
-    while not exit_state:
-        c4 = Connect4()
-        endgame = False
-        c4.print_grid_pretty()
-        while not endgame:
-            print()
-            print("Player Move")
-            print(f"Available Moves: {c4.list_moves()}" )
-            valid_inputs = list(map(str, c4.list_moves()))
-            valid_inputs += ['e']
-            print(valid_inputs)
-            invalid_input = True
+    board = GameBoard()
+    board.print()
+    while True:
+        print()
+        print("Player Move")
+        print(f"Available Moves: {board.get_available_columns()}")
+        valid_inputs = list(map(str, board.get_available_columns()))
+        valid_inputs += ['e']
+        print(valid_inputs)
 
-            while invalid_input:
-                val = input("Enter Move(e to exit):")
-                if val in valid_inputs:
-
-                    invalid_input = False
-                    break
-                print(f"{val} is not a valid input")
-
-            if val == 'e':
-                exit_state = True
+        while True:
+            val = input("Enter Move (e to exit): ")
+            if val in valid_inputs:
                 break
+            print(f"{val} is not a valid input")
 
-            c4.make_move( int(val))
-            c4.print_grid_pretty()
+        if val == 'e':
+            break
 
-            if game_end(c4, 1):
-                endgame = True
-                break
+        board.make_move(int(val))
+        board.print()
+        if game_end(board, 1):
+            break
 
-            opp_move = r.choice(c4.list_moves())
-            print(f"CPU move: {opp_move}")
-            c4.make_move(opp_move)
-            c4.print_grid_pretty()
-            if game_end(c4, 2):
-                endgame = True
-                break
+        opp_move = r.choice(board.get_available_columns())
+        print(f"CPU move: {opp_move}")
+        board.make_move(opp_move)
+        board.print()
+        if game_end(board, 2):
+            break
 
 
-def game_end(c=Connect4, player=1):
-    if len(c.list_moves()) == 0:
+def game_end(board, player=1):
+    if len(board.get_available_columns()) == 0:
         print("Draw")
         return True
-    elif c.is_win(player):
+    elif board.has_won(player):
         print(f"Player {player} won!")
         return True
     return False
+
 
 main()
