@@ -134,16 +134,18 @@ class GameBoard:
                 cols.append(col)
         return cols
 
-    def to_array(self):
+    def to_array(self, perspective=PLAYER1):
         array = np.zeros(42)
+        me = 1 if perspective == PLAYER1 else 2
+        opponent = 2 if perspective == PLAYER1 else 1
         for i in range(42):
             col = i // 6
             row = i % 6
             shift = col * 7 + row
             if (self._get_state(1) >> shift) & 1:
-                array[i] = 1
+                array[i] = me
             elif (self._get_state(2) >> shift) & 1:
-                array[i] = 2
+                array[i] = opponent
         return array
 
     def to_matrix(self):
