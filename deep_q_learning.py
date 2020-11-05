@@ -9,6 +9,8 @@ from tensorflow.keras import layers
 from tensorflow.keras import optimizers
 from tensorflow.keras import losses
 
+from connect4_env import GameBoard, PLAYER1, PLAYER2
+
 
 class Model(models.Sequential):
     def __init__(self):
@@ -28,7 +30,7 @@ class Model(models.Sequential):
 class Agent:
     def __init__(self, model, exploration_rate, discount_factor):
         self.model = model  # the brain itself
-        self.exploration_rate = exploration_rate
+        self.exploration_rate = exploration_rate  # TODO epsilon decay
         self.discount_factor = discount_factor
         self.training_data = deque(maxlen=500)  # store last 500 moves
 
@@ -36,7 +38,7 @@ class Agent:
         """
         output is 0-6, for which column to use for this action
         """
-        if random.random() < exploration_rate:
+        if random.random() < self.exploration_rate:
             return np.random.choice(7)  # explore! choose randomly 0-6 inclusive
         predictions = self.model.predict(state_array)
         return np.argmax(predictions[0])  # pick the column with the highest value
@@ -46,6 +48,8 @@ class Agent:
         if len(self.training_data) < batch_size:
             return
         batch = random.sample(self.training_data, batch_size)
+        # TODO try iterating backwards!
+        #  doing that once per episode might update more effectively; would this be a monte carlo approach vs TD?
         for from_state_array, chosen_move, to_state_array, reward, game_over in batch:
             # if the game is over, there are no valid predictions to be made from the game-ending state
             # but otherwise, we consider the prediction from the following state
@@ -64,7 +68,7 @@ class Agent:
 
 
 # THE ENVIRONMENT FOR THE AGENT
-if __name__ == "__main__":
+def run():
     weights_storage_path = "./deep_q_learning_weights.h5"
     episodes = 1000
 
@@ -76,5 +80,41 @@ if __name__ == "__main__":
 
     agent = Agent(model, exploration_rate, discount_factor)
 
-    # TODO run episodes
+    for episode in range(episodes):
+        board = GameBoard(next_player=random.choice([PLAYER1, PLAYER2]))  # new game!
 
+        if board.get_next_player() == PLAYER2:
+            board.make_move(random.choice(board.get_available_columns()))  # start with a random opponent move
+
+        while True:
+            from_state = board.to_array()
+
+            move = agent.make_move(from_state)
+            if not board.is_column_available(move):  # invalid move! punish agent & end episode
+                agent.process_feedback(from_state, move, None, -100, True)  # very strong penalty
+                break
+            board.make_move(move)  # agent move
+
+            to_state = board.to_array()
+
+            if board.has_won(PLAYER1):
+                agent.process_feedback(from_state, move, None, 100, True)
+                break  # win - end episode
+
+            available_columns = board.get_available_columns()
+            if len(available_columns) > 0:
+                board.make_move(random.choice(board.get_available_columns()))  # random opponent move
+                available_columns = board.get_available_columns()
+
+            if board.has_won(PLAYER2):
+                agent.process_feedback(from_state, move, None, 100, True)
+                break  # loss - end episode
+
+            agent.process_feedback(from_state, move, to_state, 1, True)
+
+            if len(available_columns) == 0:
+                break  # draw - end episode
+
+
+if __name__ == "__main__":
+    run()
