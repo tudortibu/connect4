@@ -50,7 +50,7 @@ class Agent:
         return np.argmax(predictions[0])  # pick the column with the highest value
 
     def update_model(self):
-        batch_size = 50
+        batch_size = 30
         if len(self.training_data) < batch_size:
             return
         batch = random.sample(self.training_data, batch_size)
@@ -79,7 +79,8 @@ class Agent:
 
 
 def get_exploration_rate(episode):
-    return 0.9998 ** episode  # starts to give .1 only after ~10,000 episodes
+    # return 0.9998 ** episode  # starts to give .1 only after ~10,000 episodes
+    return 0.999 ** episode  # starts to give .1 at ~2,000 episodes
 
 
 # THE ENVIRONMENT FOR THE AGENT
@@ -108,6 +109,9 @@ def run():
         # play an episode
         invalid_move_ending = play_against_random(agent, board, exploration_rate)
 
+        # have the agent learn a little
+        agent.update_model()
+
         average_win_rate *= 0.99
         average_win_rate += 0.01 if board.has_won(PLAYER1) else 0
 
@@ -117,7 +121,7 @@ def run():
         average_invalid_move_rate *= 0.99
         average_invalid_move_rate += 0.01 if invalid_move_ending else 0
 
-        if episode % 100 == 0:
+        if episode % 10 == 0:
             model.save_weights(weights_storage_path)
             board.print()
             now = int(time())
