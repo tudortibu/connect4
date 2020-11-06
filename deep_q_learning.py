@@ -13,6 +13,7 @@ from tensorflow.keras import losses
 from connect4_env import GameBoard, PLAYER1, PLAYER2
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # uncomment this to disable gpu
 
 
 class Model(models.Sequential):
@@ -21,9 +22,11 @@ class Model(models.Sequential):
         #  or otherwise try regularization
         super().__init__()
         self.add(keras.Input(shape=42))
-        self.add(layers.Dense(20, activation='relu'))
-        self.add(layers.Dense(40, activation='relu'))
-        self.add(layers.Dense(7, activation='sigmoid'))  # map to (0,1)  # TODO try other activations?
+        self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(7))
         self.compile(
             loss=losses.MeanSquaredError(),  # TODO play around with loss functions; https://stats.stackexchange.com/a/234578
             optimizer=optimizers.Adam(lr=0.0001)  # TODO play around with optimizers % learning rate
@@ -98,71 +101,80 @@ def run():
     average_invalid_move_rate = 0
     last_verbose_epoch = int(time())
 
-    for episode in range(episodes):
+    for episode in range(episodes+1):
         board = GameBoard(next_player=random.choice([PLAYER1, PLAYER2]))  # new game!
 
-        if board.get_next_player() == PLAYER2:
-            board.make_move(random.choice(board.get_available_columns()))  # start with a random opponent move
-
-        agent_move_count = 0
-        agent_invalid_move = False
         exploration_rate = get_exploration_rate(episode)
-        while True:
-            from_state = board.to_array()
 
-            move = agent.make_move(from_state, exploration_rate)
-            if not board.is_column_available(move):  # invalid move! punish agent & end episode
-                agent.process_feedback(from_state, move, None, -100, True)  # very strong penalty
-                agent_invalid_move = True
-                break
-            board.make_move(move)  # agent move
-            agent_move_count += 1
-
-            to_state = board.to_array()
-
-            if board.has_won(PLAYER1):
-                agent.process_feedback(from_state, move, None, 100, True)
-                break  # win - end episode
-
-            available_columns = board.get_available_columns()
-            if len(available_columns) > 0:
-                board.make_move(random.choice(board.get_available_columns()))  # random opponent move
-                available_columns = board.get_available_columns()
-
-            if board.has_won(PLAYER2):
-                agent.process_feedback(from_state, move, None, 100, True)
-                break  # loss - end episode
-
-            agent.process_feedback(from_state, move, to_state, 1, True)
-
-            if len(available_columns) == 0:
-                break  # draw - end episode
+        # play an episode
+        invalid_move_ending = play_against_random(agent, board, exploration_rate)
 
         average_win_rate *= 0.99
         average_win_rate += 0.01 if board.has_won(PLAYER1) else 0
 
         average_moves *= 0.99
-        average_moves += 0.01 * agent_move_count
+        average_moves += 0.01 * board.total_moves/2
 
         average_invalid_move_rate *= 0.99
-        average_invalid_move_rate *= 0.01 if agent_invalid_move else 0
+        average_invalid_move_rate += 0.01 if invalid_move_ending else 0
 
-        if (episode-1) % 100 == 0:
+        if episode % 100 == 0:
             model.save_weights(weights_storage_path)
             board.print()
             now = int(time())
             time_delta = now-last_verbose_epoch
             last_verbose_epoch = now
-            print("episode #%d - epsilon: %.2f - win rate: %d%% - avg reward: %d - avg moves: %d - invalid rate: %d%% - delta time: %dsec" %
+            print("episode #%d - win rate: %d%% - epsilon: %.2f - avg reward: %d - avg moves: %d - invalid rate: %d%% - delta time: %dsec" %
                   (episode,
-                   exploration_rate,
                    average_win_rate*100,
+                   exploration_rate,
                    np.average(np.array(agent.reward_history)),
                    average_moves,
-                   average_invalid_move_rate,
+                   average_invalid_move_rate*100,
                    time_delta
                    )
                   )
+
+
+def play_against_random(agent, board, exploration_rate):
+    if board.get_next_player() == PLAYER2:
+        board.make_move(random.choice(board.get_available_columns()))  # start with a random opponent move
+
+    invalid_move_termination = False
+    while True:
+        from_state = board.to_array()
+
+        move = agent.make_move(from_state, exploration_rate)
+        if not board.is_column_available(move):  # invalid move! punish agent & end episode
+            agent.process_feedback(from_state, move, None, -500, True)  # very strong penalty
+            invalid_move_termination = True
+            break
+        board.make_move(move)  # agent move
+
+        to_state = board.to_array()
+
+        if board.has_won(PLAYER1):
+            agent.process_feedback(from_state, move, None, 100, True)
+            break  # win - end episode
+
+        available_columns = board.get_available_columns()
+        if len(available_columns) > 0:
+            board.make_move(random.choice(board.get_available_columns()))  # random opponent move
+            available_columns = board.get_available_columns()
+
+        if board.has_won(PLAYER2):
+            agent.process_feedback(from_state, move, None, -100, True)
+            break  # loss - end episode
+
+        agent.process_feedback(from_state, move, to_state, 1, True)
+
+        if len(available_columns) == 0:
+            break  # draw - end episode
+    return invalid_move_termination
+
+
+def play_against_self(agent, board, exploration_rate):
+    raise Exception("not implemented")  # TODO
 
 
 if __name__ == "__main__":
