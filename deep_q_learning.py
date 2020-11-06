@@ -24,12 +24,11 @@ class Model(models.Sequential):
         self.add(keras.Input(shape=42))
         self.add(layers.Dense(50, activation='relu'))
         self.add(layers.Dense(50, activation='relu'))
-        self.add(layers.Dense(50, activation='relu'))
-        self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(21, activation='relu'))
         self.add(layers.Dense(7))
         self.compile(
             loss=losses.MeanSquaredError(),  # TODO play around with loss functions; https://stats.stackexchange.com/a/234578
-            optimizer=optimizers.Adam(lr=0.0001)  # TODO play around with optimizers % learning rate
+            optimizer=optimizers.Adam(lr=0.00001)  # TODO play around with optimizers % learning rate
         )
 
 
@@ -51,19 +50,20 @@ class Agent:
         return np.argmax(predictions[0])  # pick the column with the highest value
 
     def update_model(self):
-        batch_size = 100
+        batch_size = 50
         if len(self.training_data) < batch_size:
             return
         batch = random.sample(self.training_data, batch_size)
-        # TODO try iterating backwards!
-        #  doing that once per episode might update more effectively; would this be a monte carlo approach vs TD?
+        # there is no point in iterating backwards here, as the batch is randomly sampled; it's not a slice
+        # TODO try predicting in bulk & see if that improves performance a bit
+        #  increasing batch size would be a good idea if GPU can take care of paralleling the bulk prediction
         for from_state_array, chosen_move, to_state_array, reward, game_over in batch:
             # if the game is over, there are no valid predictions to be made from the game-ending state
             # but otherwise, we consider the prediction from the following state
             target = reward if game_over else \
-                reward + self.discount_factor * np.amax(self.model.predict(np.array([to_state_array]))[0])
+                reward + self.discount_factor * np.amax(self.model.predict(to_state_array)[0])
             # for the training labels, use model predictions with changed "chosen_move" value
-            labels = self.model.predict(np.array([from_state_array]))
+            labels = self.model.predict(from_state_array)
             labels[0][chosen_move] = target
             self.model.fit(from_state_array, labels, epochs=1, verbose=0)
 
@@ -71,24 +71,23 @@ class Agent:
         """
         game_end: aka end of the _episode_; i.e. a win, loss, or draw
         """
-        self.training_data.append((from_state_array, chosen_move, to_state_array, reward, game_over))
+        self.training_data.append((np.array([from_state_array]), chosen_move, np.array([to_state_array]), reward, game_over))
         self.episode_reward += reward
         if game_over:
             self.reward_history.append(self.episode_reward)
             self.episode_reward = 0
 
 
-# this epsilon function starts to give 10% only at ~10,000 episodes
 def get_exploration_rate(episode):
-    return 0.9998 ** episode
+    return 0.9998 ** episode  # starts to give .1 only after ~10,000 episodes
 
 
 # THE ENVIRONMENT FOR THE AGENT
 def run():
     weights_storage_path = "./deep_q_learning_weights.h5"
-    episodes = 15000
+    episodes = 20000
 
-    discount_factor = 0.9  # aka gamma
+    discount_factor = 0.85  # aka gamma
 
     model = Model()
     if os.path.isfile(weights_storage_path):
