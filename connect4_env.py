@@ -1,4 +1,6 @@
 import os
+from copy import deepcopy
+
 import numpy as np
 
 PLAYER1 = 1
@@ -63,6 +65,9 @@ class GameBoard:
             if self.player1_goes_next and player1_move_count > player2_move_count\
                     or not self.player1_goes_next and player2_move_count > player1_move_count:
                 raise Exception("Invalid next_move_player argument")
+
+    def copy(self):
+        return deepcopy(self)
 
     def _get_state(self, player):
         return self.player1_state if player == 1 else self.player1_state ^ self.player2_state_diff
