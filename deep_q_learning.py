@@ -36,9 +36,9 @@ class Agent:
     def __init__(self, model, discount_factor):
         self.model = model  # the brain itself
         self.discount_factor = discount_factor
-        self.training_data = deque(maxlen=500)  # store last 500 moves
-        self.reward_history = deque(maxlen=100)  # last 100 episodes
-        self.episode_reward = 0
+
+        self.memory_NT = deque(maxlen=2000)  # last 2000 non-terminal transitions
+        self.memory_T = deque(maxlen=1000)  # last 1000 terminal transitions
 
     def make_move(self, state_array, exploration_rate):
         """
@@ -49,38 +49,61 @@ class Agent:
         predictions = self.model.predict(np.array([state_array]))
         return np.argmax(predictions[0])  # pick the column with the highest value
 
-    def update_model(self):
-        batch_size = 30
-        if len(self.training_data) < batch_size:
+    def learn(self):
+        self.learn_on(False, 300)  # more non-terminal data
+        self.learn_on(True, 100)  # less (but episode-proportionally more) terminal data
+
+    def learn_on(self, terminal_data, batch_size):
+        data = self.memory_T if terminal_data else self.memory_NT
+        if len(data) < batch_size:
             return
-        batch = random.sample(self.training_data, batch_size)
-        # there is no point in iterating backwards here, as the batch is randomly sampled; it's not a slice
-        # TODO try predicting in bulk & see if that improves performance a bit
-        #  increasing batch size would be a good idea if GPU can take care of paralleling the bulk prediction
-        for from_state_array, chosen_move, to_state_array, reward, game_over in batch:
-            # if the game is over, there are no valid predictions to be made from the game-ending state
-            # but otherwise, we consider the prediction from the following state
-            target = reward if game_over else \
-                reward + self.discount_factor * np.amax(self.model.predict(to_state_array)[0])
-            # for the training labels, use model predictions with changed "chosen_move" value
-            labels = self.model.predict(from_state_array)
-            labels[0][chosen_move] = target
-            self.model.fit(from_state_array, labels, epochs=1, verbose=0)
+        batch = random.sample(data, batch_size)
+
+        from_states = np.zeros((batch_size, 42))
+        moves = np.zeros(batch_size, dtype=np.int8)  # integers, [0-7)
+        to_states = np.zeros((batch_size, 42))  # unused if terminal_data == True
+        rewards = np.zeros(batch_size)
+
+        for i in range(batch_size):
+            from_state, move, to_state, reward = batch[i]
+            from_states[i] = from_state
+            moves[i] = move
+            to_states[i] = to_state
+            rewards[i] = reward
+
+        labels = self.model.predict(from_states)  # (batch_size, 7)
+        # skipping the following calculation for terminal data, as it's not needed then
+        to_state_predictions = None if terminal_data else self.model.predict(to_states)
+
+        for i in range(batch_size):
+            labels[i, moves[i]] = rewards[i] +\
+                               (0 if terminal_data else self.discount_factor * np.amax(to_state_predictions[i]))
+
+        self.model.fit(from_states, labels, epochs=1, verbose=0, batch_size=batch_size, shuffle=False)
+
+        # OLD LOGIC
+        # for from_state_array, chosen_move, to_state_array, reward, game_over in batch:
+        #     # if the game is over, there are no valid predictions to be made from the game-ending state
+        #     # but otherwise, we consider the prediction from the following state
+        #     target = reward if game_over else \
+        #         reward + self.discount_factor * np.amax(self.model.predict(to_state_array)[0])
+        #     # for the training labels, use model predictions with changed "chosen_move" value
+        #     labels = self.model.predict(from_state_array)
+        #     labels[0][chosen_move] = target
+        #     self.model.fit(from_state_array, labels, epochs=1, verbose=0)
 
     def process_feedback(self, from_state_array, chosen_move, to_state_array, reward, game_over):
         """
         game_end: aka end of the _episode_; i.e. a win, loss, or draw
         """
-        self.training_data.append((np.array([from_state_array]), chosen_move, np.array([to_state_array]), reward, game_over))
-        self.episode_reward += reward
-        if game_over:
-            self.reward_history.append(self.episode_reward)
-            self.episode_reward = 0
+        from_state = np.array([from_state_array])
+        to_state = np.array([to_state_array]) if to_state_array is not None else None
+        data = (from_state, chosen_move, to_state, reward)
+        self.memory_T.append(data) if game_over else self.memory_NT.append(data)
 
 
 def get_exploration_rate(episode):
-    # return 0.9998 ** episode  # starts to give .1 only after ~10,000 episodes
-    return 0.999 ** episode  # starts to give .1 at ~2,000 episodes
+    return max(0.05, 0.999 ** episode)  # starts to give .1 at ~2,000 episodes
 
 
 # THE ENVIRONMENT FOR THE AGENT
@@ -101,16 +124,16 @@ def run():
     average_invalid_move_rate = 0
     last_verbose_epoch = int(time())
 
-    for episode in range(episodes+1):
+    start_episode = 0
+    for episode in range(start_episode, episodes+1, 1):
         board = GameBoard(next_player=random.choice([PLAYER1, PLAYER2]))  # new game!
 
         exploration_rate = get_exploration_rate(episode)
 
         # play an episode
         invalid_move_ending = play_against_random(agent, board, exploration_rate)
-
         # have the agent learn a little
-        agent.update_model()
+        agent.learn()
 
         average_win_rate *= 0.99
         average_win_rate += 0.01 if board.has_won(PLAYER1) else 0
@@ -131,7 +154,7 @@ def run():
                   (episode,
                    average_win_rate*100,
                    exploration_rate,
-                   np.average(np.array(agent.reward_history)),
+                   0, #np.average(np.array(agent.reward_history)),  # FIXME
                    average_moves,
                    average_invalid_move_rate*100,
                    time_delta
