@@ -24,11 +24,13 @@ class Model(models.Sequential):
         self.add(keras.Input(shape=42))
         self.add(layers.Dense(50, activation='relu'))
         self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(50, activation='relu'))
         self.add(layers.Dense(21, activation='relu'))
         self.add(layers.Dense(7))
         self.compile(
             loss=losses.MeanSquaredError(),  # TODO play around with loss functions; https://stats.stackexchange.com/a/234578
-            optimizer=optimizers.Adam(lr=0.00001)  # TODO play around with optimizers % learning rate
+            optimizer=optimizers.Adam(lr=0.0001)  # TODO play around with optimizers % learning rate
         )
 
 
@@ -40,7 +42,7 @@ class Agent:
         self.memory_NT = deque(maxlen=2000)  # last 2000 non-terminal transitions
         self.memory_T = deque(maxlen=1000)  # last 1000 terminal transitions
 
-    def make_move(self, state_array, exploration_rate):
+    def choose_move(self, state_array, exploration_rate):
         """
         output is 0-6, for which column to use for this action
         """
@@ -50,8 +52,8 @@ class Agent:
         return np.argmax(predictions[0])  # pick the column with the highest value
 
     def learn(self):
-        self.learn_on(False, 300)  # more non-terminal data
         self.learn_on(True, 100)  # less (but episode-proportionally more) terminal data
+        self.learn_on(False, 400)  # more non-terminal data
 
     def learn_on(self, terminal_data, batch_size):
         data = self.memory_T if terminal_data else self.memory_NT
@@ -103,7 +105,8 @@ class Agent:
 
 
 def get_exploration_rate(episode):
-    return max(0.05, 0.999 ** episode)  # starts to give .1 at ~2,000 episodes
+    return 0.1
+    return max(0.05, 0.9995 ** episode)  # gives flat .05 past 6,000 episodes
 
 
 # THE ENVIRONMENT FOR THE AGENT
@@ -111,7 +114,7 @@ def run():
     weights_storage_path = "./deep_q_learning_weights.h5"
     episodes = 20000
 
-    discount_factor = 0.85  # aka gamma
+    discount_factor = 0.9  # aka gamma
 
     model = Model()
     if os.path.isfile(weights_storage_path):
@@ -120,6 +123,7 @@ def run():
     agent = Agent(model, discount_factor)
 
     average_win_rate = 0
+    average_reward = 0
     average_moves = 0
     average_invalid_move_rate = 0
     last_verbose_epoch = int(time())
@@ -131,18 +135,21 @@ def run():
         exploration_rate = get_exploration_rate(episode)
 
         # play an episode
-        invalid_move_ending = play_against_random(agent, board, exploration_rate)
+        total_reward, invalid_move = play_against_self(agent, board, exploration_rate)
         # have the agent learn a little
         agent.learn()
 
         average_win_rate *= 0.99
         average_win_rate += 0.01 if board.has_won(PLAYER1) else 0
 
+        average_reward *= 0.99
+        average_reward += 0.01*total_reward
+
         average_moves *= 0.99
         average_moves += 0.01 * board.total_moves/2
 
         average_invalid_move_rate *= 0.99
-        average_invalid_move_rate += 0.01 if invalid_move_ending else 0
+        average_invalid_move_rate += 0.01 if invalid_move else 0
 
         if episode % 10 == 0:
             model.save_weights(weights_storage_path)
@@ -154,7 +161,7 @@ def run():
                   (episode,
                    average_win_rate*100,
                    exploration_rate,
-                   0, #np.average(np.array(agent.reward_history)),  # FIXME
+                   average_reward,
                    average_moves,
                    average_invalid_move_rate*100,
                    time_delta
@@ -163,44 +170,112 @@ def run():
 
 
 def play_against_random(agent, board, exploration_rate):
-    if board.get_next_player() == PLAYER2:
-        board.make_move(random.choice(board.get_available_columns()))  # start with a random opponent move
 
-    invalid_move_termination = False
-    while True:
-        from_state = board.to_array()
+    total_reward = 0
+    invalid_move = False
 
-        move = agent.make_move(from_state, exploration_rate)
-        if not board.is_column_available(move):  # invalid move! punish agent & end episode
-            agent.process_feedback(from_state, move, None, -500, True)  # very strong penalty
-            invalid_move_termination = True
-            break
-        board.make_move(move)  # agent move
+    last_agent_from_state = None
+    last_agent_move = None
 
-        to_state = board.to_array()
+    while len(board.get_available_columns()) > 0:
+        # OPPONENT'S TURN
+        if board.get_next_player() == PLAYER2:
+            move = random.choice(board.get_available_columns())
+            board.make_move(move)  # opponent makes random move
+            if board.has_won(PLAYER2):
+                agent.process_feedback(last_agent_from_state, last_agent_move, None, -100, True)
+                total_reward -= 100
+                # also, tell the agent that blocking the win would've been a good move!
+                if move != last_agent_move:
+                    board = board.copy()
+                    board.undo_move()
+                    board.undo_move()
+                    from_state = board.to_array()
+                    board.make_move(move)
+                    if board.has_won(PLAYER1):  # even better, this move would've given a win!
+                        agent.process_feedback(from_state, move, board.to_array(), 100, True)
+                    else:  # otherwise, give a good reward for the theoretical blocking of the opponent's win
+                        agent.process_feedback(from_state, move, board.to_array(), 20, False)
+                break  # loss - end episode
+        # AGENT'S TURN
+        else:
+            from_state = board.to_array()
+            move = agent.choose_move(from_state, exploration_rate)
+            reward = 1  # default reward for generic move
+            game_over = False
 
-        if board.has_won(PLAYER1):
-            agent.process_feedback(from_state, move, None, 100, True)
-            break  # win - end episode
+            if not board.is_column_available(move):
+                reward = -300  # invalid move! hard penalty
+                game_over = True
+                invalid_move = True
+            else:
+                board.make_move(move)  # move is valid, do it
+                if board.has_won(PLAYER1):
+                    reward = 100  # win! significant reward
+                    game_over = True
 
-        available_columns = board.get_available_columns()
-        if len(available_columns) > 0:
-            board.make_move(random.choice(board.get_available_columns()))  # random opponent move
-            available_columns = board.get_available_columns()
+            agent.process_feedback(from_state, move, board.to_array(), reward, game_over)
 
-        if board.has_won(PLAYER2):
-            agent.process_feedback(from_state, move, None, -100, True)
-            break  # loss - end episode
+            last_agent_from_state = from_state
+            last_agent_move = move
+            total_reward += reward
 
-        agent.process_feedback(from_state, move, to_state, 1, True)
+            if game_over:
+                break
 
-        if len(available_columns) == 0:
-            break  # draw - end episode
-    return invalid_move_termination
+    return total_reward, invalid_move
 
 
 def play_against_self(agent, board, exploration_rate):
-    raise Exception("not implemented")  # TODO
+
+    total_reward = {PLAYER1: 0, PLAYER2: 0}
+    invalid_move = False
+
+    last_move = None
+
+    while len(board.get_available_columns()) > 0:
+        currently_playing_as = board.get_next_player()
+
+        from_state = board.to_array(perspective=currently_playing_as)
+        move = agent.choose_move(from_state, exploration_rate)
+        reward = 1  # default reward for generic move
+        game_over = False
+        to_state = None
+
+        if not board.is_column_available(move):
+            reward = -300  # invalid move! hard penalty
+            game_over = True
+            invalid_move = True
+        else:
+            board.make_move(move)  # move is valid, do it
+            to_state = board.to_array(perspective=currently_playing_as)
+            if board.has_won(currently_playing_as):
+                reward = 100  # win! significant reward
+                game_over = True
+                # also, tell the agent, from opponent perspective, that blocking this win would've been a good move
+                if move != last_move:
+                    other_player = PLAYER2 if currently_playing_as == PLAYER1 else PLAYER1
+                    board_copy = board.copy()
+                    board_copy.undo_move()  # undo this win
+                    board_copy.undo_move()  # undo whatever the opponent did (last_move)
+                    from_state2 = board_copy.to_array(perspective=other_player)
+                    board_copy.make_move(move)  # assume opponent chose this winning column instead
+                    to_state2 = board_copy.to_array(perspective=other_player)
+                    if board_copy.has_won(other_player):  # opponent would have won!
+                        agent.process_feedback(from_state2, move, None, 100, True)
+                    else:  # opponent would have blocked the win, which is way better than making a non-winning move
+                        agent.process_feedback(from_state2, move, to_state2, 20, False)
+
+        agent.process_feedback(from_state, move, None if game_over else to_state, reward, game_over)
+
+        last_move = move
+        total_reward[currently_playing_as] += reward
+
+        if game_over:
+            break
+
+    avg_reward = (total_reward[PLAYER1]+total_reward[PLAYER2])/2
+    return avg_reward, invalid_move
 
 
 if __name__ == "__main__":
