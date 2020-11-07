@@ -13,7 +13,7 @@ from tensorflow.keras import losses
 from connect4_env import GameBoard, PLAYER1, PLAYER2
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # uncomment this to disable gpu
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # comment this to enable gpu
 
 
 class Model(models.Sequential):
@@ -51,11 +51,11 @@ class Agent:
         predictions = self.model.predict(np.array([state_array]))
         return np.argmax(predictions[0])  # pick the column with the highest value
 
-    def learn(self):
-        self.learn_on(True, 100)  # less (but episode-proportionally more) terminal data
-        self.learn_on(False, 400)  # more non-terminal data
+    def learn(self, verbose):
+        self.learn_on(True, 100, verbose)  # less (but episode-proportionally more) terminal data
+        self.learn_on(False, 400, verbose)  # more non-terminal data
 
-    def learn_on(self, terminal_data, batch_size):
+    def learn_on(self, terminal_data, batch_size, verbose):
         data = self.memory_T if terminal_data else self.memory_NT
         if len(data) < batch_size:
             return
@@ -81,7 +81,7 @@ class Agent:
             labels[i, moves[i]] = rewards[i] +\
                                (0 if terminal_data else self.discount_factor * np.amax(to_state_predictions[i]))
 
-        self.model.fit(from_states, labels, epochs=1, verbose=0, batch_size=batch_size, shuffle=False)
+        self.model.fit(from_states, labels, epochs=1, verbose=verbose, batch_size=batch_size, shuffle=False)
 
         # OLD LOGIC
         # for from_state_array, chosen_move, to_state_array, reward, game_over in batch:
@@ -112,9 +112,9 @@ def get_exploration_rate(episode):
 # THE ENVIRONMENT FOR THE AGENT
 def run():
     weights_storage_path = "./deep_q_learning_weights.h5"
-    episodes = 20000
+    episodes = 200000
 
-    discount_factor = 0.9  # aka gamma
+    discount_factor = 0.9  # aka gamma  # TODO try lower gamma (0.75)
 
     model = Model()
     if os.path.isfile(weights_storage_path):
@@ -137,7 +137,7 @@ def run():
         # play an episode
         total_reward, invalid_move = play_against_self(agent, board, exploration_rate)
         # have the agent learn a little
-        agent.learn()
+        agent.learn(verbose=episode % 100 == 0)
 
         average_win_rate *= 0.99
         average_win_rate += 0.01 if board.has_won(PLAYER1) else 0
@@ -151,7 +151,7 @@ def run():
         average_invalid_move_rate *= 0.99
         average_invalid_move_rate += 0.01 if invalid_move else 0
 
-        if episode % 10 == 0:
+        if episode % 100 == 0:
             model.save_weights(weights_storage_path)
             board.print()
             now = int(time())
@@ -195,7 +195,7 @@ def play_against_random(agent, board, exploration_rate):
                     if board.has_won(PLAYER1):  # even better, this move would've given a win!
                         agent.process_feedback(from_state, move, board.to_array(), 100, True)
                     else:  # otherwise, give a good reward for the theoretical blocking of the opponent's win
-                        agent.process_feedback(from_state, move, board.to_array(), 20, False)
+                        agent.process_feedback(from_state, move, board.to_array(), 95, False)
                 break  # loss - end episode
         # AGENT'S TURN
         else:
@@ -238,7 +238,7 @@ def play_against_self(agent, board, exploration_rate):
 
         from_state = board.to_array(perspective=currently_playing_as)
         move = agent.choose_move(from_state, exploration_rate)
-        reward = 1  # default reward for generic move
+        reward = -1  # default reward for generic move; discourages filling up the board to get small rewards
         game_over = False
         to_state = None
 
@@ -264,7 +264,7 @@ def play_against_self(agent, board, exploration_rate):
                     if board_copy.has_won(other_player):  # opponent would have won!
                         agent.process_feedback(from_state2, move, None, 100, True)
                     else:  # opponent would have blocked the win, which is way better than making a non-winning move
-                        agent.process_feedback(from_state2, move, to_state2, 20, False)
+                        agent.process_feedback(from_state2, move, to_state2, 95, False)
 
         agent.process_feedback(from_state, move, None if game_over else to_state, reward, game_over)
 
