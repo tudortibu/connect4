@@ -64,3 +64,17 @@ class TestGameBoard(unittest.TestCase):
         board.make_move(0)  # player1 move again
         matrix[get_coord(col=0, row=0)] = 1
         self.assertTrue(np.array_equal(matrix, board.to_matrix()))
+
+    def test_copy(self):
+        board = GameBoard()
+        board.make_move(0)
+        board.make_move(0)
+        board.make_move(0)
+        board.make_move(0)
+
+        copy = board.copy()
+        copy.undo_move()
+        copy.undo_move()
+
+        self.assertNotEqual(board.total_moves, copy.total_moves)
+        self.assertNotEqual(board.next_slot_index, copy.next_slot_index)
