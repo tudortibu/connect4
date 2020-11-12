@@ -39,8 +39,8 @@ class Agent:
         self.model = model  # the brain itself
         self.discount_factor = discount_factor
 
-        self.memory_NT = deque(maxlen=2000)  # last 2000 non-terminal transitions
-        self.memory_T = deque(maxlen=1000)  # last 1000 terminal transitions
+        self.memory_NT = deque(maxlen=500)  # non-terminal transitions
+        self.memory_T = deque(maxlen=50)  # terminal transitions
 
     def choose_move(self, state_array, exploration_rate):
         """
@@ -52,8 +52,8 @@ class Agent:
         return np.argmax(predictions[0])  # pick the column with the highest value
 
     def learn(self, verbose):
-        self.learn_on(True, 100, verbose)  # less (but episode-proportionally more) terminal data
-        self.learn_on(False, 400, verbose)  # more non-terminal data
+        self.learn_on(True, 20, verbose)  # less (but episode-proportionally more) terminal data
+        self.learn_on(False, 300, verbose)  # more non-terminal data
 
     def learn_on(self, terminal_data, batch_size, verbose):
         data = self.memory_T if terminal_data else self.memory_NT
@@ -81,7 +81,7 @@ class Agent:
             labels[i, moves[i]] = rewards[i] +\
                                (0 if terminal_data else self.discount_factor * np.amax(to_state_predictions[i]))
 
-        self.model.fit(from_states, labels, epochs=1, verbose=verbose, batch_size=batch_size, shuffle=False)
+        self.model.fit(from_states, labels, epochs=1, verbose=2 if verbose else 0, batch_size=batch_size, shuffle=False)
 
         # OLD LOGIC
         # for from_state_array, chosen_move, to_state_array, reward, game_over in batch:
@@ -112,7 +112,7 @@ def get_exploration_rate(episode):
 # THE ENVIRONMENT FOR THE AGENT
 def run():
     weights_storage_path = "./deep_q_learning_weights.h5"
-    episodes = 200000
+    episodes = 500000
 
     discount_factor = 0.9  # aka gamma  # TODO try lower gamma (0.75)
 
@@ -214,7 +214,7 @@ def play_against_random(agent, board, exploration_rate):
                     reward = 100  # win! significant reward
                     game_over = True
 
-            agent.process_feedback(from_state, move, board.to_array(), reward, game_over)
+            agent.process_feedback(from_state, move, None if game_over else board.to_array(), reward, game_over)
 
             last_agent_from_state = from_state
             last_agent_move = move
@@ -237,7 +237,26 @@ def play_against_self(agent, board, exploration_rate):
         currently_playing_as = board.get_next_player()
 
         from_state = board.to_array(perspective=currently_playing_as)
-        move = agent.choose_move(from_state, exploration_rate)
+
+        # to simplify initial learning, pardon a good % of invalid moves (give agent more chance to explore)
+        invalid_attempt_count = 0
+        while True:
+            move = agent.choose_move(from_state, exploration_rate)
+            if not board.is_column_available(move) and exploration_rate >= 0.2:
+                if invalid_attempt_count >= 3 or random.random() < 0.25:
+                    break
+                invalid_attempt_count += 1
+                continue  # try again
+            break
+
+        # for even better learning, test all possible moves and make the one that ends in a win (if possible)
+        # this will both train the agent to make such a move or block it in the perspective of the opponent (see below)
+        for test_move in board.get_available_columns():
+            board.make_move(test_move)
+            if board.get_winner() is not None:
+                move = test_move
+            board.undo_move()
+
         reward = -1  # default reward for generic move; discourages filling up the board to get small rewards
         game_over = False
         to_state = None
