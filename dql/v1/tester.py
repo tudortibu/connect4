@@ -2,11 +2,11 @@ import os
 
 from connect4_env import GameBoard, PLAYER2
 
-from deep_q_learning import Agent, Model
+from dql.v1.dql import Agent, Model
 
 
 def main():
-    weights_storage_path = "./deep_q_learning_weights.h5"
+    weights_storage_path = "weights.h5"
     model = Model()
     if os.path.isfile(weights_storage_path):
         model.load_weights(weights_storage_path)

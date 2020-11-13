@@ -106,13 +106,14 @@ class Agent:
 
 def get_exploration_rate(episode):
     return 0.1
+    return max(0.1, 0.99999 ** (episode-222800))  # FIXME temp rate to give better board coverage
     return max(0.05, 0.9995 ** episode)  # gives flat .05 past 6,000 episodes
 
 
 # THE ENVIRONMENT FOR THE AGENT
 def run():
-    weights_storage_path = "./deep_q_learning_weights.h5"
-    episodes = 500000
+    weights_storage_path = "weights.h5"
+    episodes = 505000
 
     discount_factor = 0.9  # aka gamma  # TODO try lower gamma (0.75)
 
@@ -128,14 +129,15 @@ def run():
     average_invalid_move_rate = 0
     last_verbose_epoch = int(time())
 
-    start_episode = 0
+    start_episode = 500000
     for episode in range(start_episode, episodes+1, 1):
         board = GameBoard(next_player=random.choice([PLAYER1, PLAYER2]))  # new game!
 
         exploration_rate = get_exploration_rate(episode)
 
         # play an episode
-        total_reward, invalid_move = play_against_self(agent, board, exploration_rate)
+        # total_reward, invalid_move = play_against_self(agent, board, exploration_rate)
+        total_reward, invalid_move = play_against_random(agent, board, exploration_rate)
         # have the agent learn a little
         agent.learn(verbose=episode % 100 == 0)
 
@@ -177,10 +179,15 @@ def play_against_random(agent, board, exploration_rate):
     last_agent_from_state = None
     last_agent_move = None
 
+    last_random_move = None  # FIXME remove temp
+
     while len(board.get_available_columns()) > 0:
         # OPPONENT'S TURN
         if board.get_next_player() == PLAYER2:
-            move = random.choice(board.get_available_columns())
+            if last_random_move in board.get_available_columns():
+                move = last_random_move
+            else:
+                last_random_move = move = random.choice(board.get_available_columns())
             board.make_move(move)  # opponent makes random move
             if board.has_won(PLAYER2):
                 agent.process_feedback(last_agent_from_state, last_agent_move, None, -100, True)
