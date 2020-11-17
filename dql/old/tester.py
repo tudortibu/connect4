@@ -2,7 +2,7 @@ import os
 
 from connect4_env import GameBoard, PLAYER2
 
-from dql.v2.trainer import Agent, Model
+from dql.old.trainer import Agent, Model
 
 
 def main():
