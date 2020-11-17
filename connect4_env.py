@@ -141,8 +141,8 @@ class GameBoard:
 
     def to_array(self, perspective=PLAYER1):
         array = np.zeros(42)
-        me = 1 if perspective == PLAYER1 else 2
-        opponent = 2 if perspective == PLAYER1 else 1
+        me = 1 if perspective == PLAYER1 else -1
+        opponent = -1 if perspective == PLAYER1 else 1
         for i in range(42):
             col = i // 6
             row = i % 6
