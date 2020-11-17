@@ -21,11 +21,10 @@ class Model(models.Sequential):
         # TODO try 2d convolution
         #  or otherwise try regularization
         super().__init__()
-        self.add(keras.Input(shape=42))
-        self.add(layers.Dense(50, activation='relu'))
-        self.add(layers.Dense(50, activation='relu'))
-        self.add(layers.Dense(50, activation='relu'))
-        self.add(layers.Dense(50, activation='relu'))
+        self.add(layers.Dense(42, input_dim=42, activation='relu'))
+        self.add(layers.Dense(42, activation='relu'))
+        self.add(layers.Dense(42, activation='relu'))
+        self.add(layers.Dense(42, activation='relu'))
         self.add(layers.Dense(21, activation='relu'))
         self.add(layers.Dense(7))
         self.compile(
@@ -38,9 +37,7 @@ class Agent:
     def __init__(self, model, discount_factor):
         self.model = model  # the brain itself
         self.discount_factor = discount_factor
-
-        self.memory_NT = deque(maxlen=500)  # non-terminal transitions
-        self.memory_T = deque(maxlen=50)  # terminal transitions
+        self.feedback = deque(maxlen=50)
 
     def choose_move(self, state_array, exploration_rate):
         """
@@ -51,37 +48,25 @@ class Agent:
         predictions = self.model.predict(np.array([state_array]))
         return np.argmax(predictions[0])  # pick the column with the highest value
 
-    def learn(self, verbose):
-        self.learn_on(True, 20, verbose)  # less (but episode-proportionally more) terminal data
-        self.learn_on(False, 300, verbose)  # more non-terminal data
+    def learn(self):
+        batch_size = 30
+        if len(self.feedback) < batch_size:
+            return 0
 
-    def learn_on(self, terminal_data, batch_size, verbose):
-        data = self.memory_T if terminal_data else self.memory_NT
-        if len(data) < batch_size:
-            return
-        batch = random.sample(data, batch_size)
+        batch = random.sample(self.feedback, batch_size)
 
-        from_states = np.zeros((batch_size, 42))
-        moves = np.zeros(batch_size, dtype=np.int8)  # integers, [0-7)
-        to_states = np.zeros((batch_size, 42))  # unused if terminal_data == True
-        rewards = np.zeros(batch_size)
+        total_loss = 0
 
-        for i in range(batch_size):
-            from_state, move, to_state, reward = batch[i]
-            from_states[i] = from_state
-            moves[i] = move
-            to_states[i] = to_state
-            rewards[i] = reward
+        for from_state, move, to_state, reward in batch:
+            fit_input = np.array([from_state])
+            predictions = self.model.predict(fit_input if to_state is None else np.array([from_state, to_state]))
+            labels = predictions[0]
+            labels[move] = reward
+            if to_state is not None:  # not terminal move; add discounted reward from subsequent state
+                labels[move] += self.discount_factor * np.amax(predictions[1])
+            total_loss += self.model.fit(fit_input, np.array([labels]), epochs=1, verbose=0, shuffle=False).history["loss"][0]
 
-        labels = self.model.predict(from_states)  # (batch_size, 7)
-        # skipping the following calculation for terminal data, as it's not needed then
-        to_state_predictions = None if terminal_data else self.model.predict(to_states)
-
-        for i in range(batch_size):
-            labels[i, moves[i]] = rewards[i] +\
-                               (0 if terminal_data else self.discount_factor * np.amax(to_state_predictions[i]))
-
-        self.model.fit(from_states, labels, epochs=1, verbose=2 if verbose else 0, batch_size=batch_size, shuffle=False)
+        return total_loss/batch_size
 
         # OLD LOGIC
         # for from_state_array, chosen_move, to_state_array, reward, game_over in batch:
@@ -94,28 +79,23 @@ class Agent:
         #     labels[0][chosen_move] = target
         #     self.model.fit(from_state_array, labels, epochs=1, verbose=0)
 
-    def process_feedback(self, from_state_array, chosen_move, to_state_array, reward, game_over):
+    def process_feedback(self, from_state_array, chosen_move, to_state_array, reward):
         """
         game_end: aka end of the _episode_; i.e. a win, loss, or draw
         """
-        from_state = np.array([from_state_array])
-        to_state = np.array([to_state_array]) if to_state_array is not None else None
-        data = (from_state, chosen_move, to_state, reward)
-        self.memory_T.append(data) if game_over else self.memory_NT.append(data)
+        self.feedback.append((from_state_array, chosen_move, to_state_array, reward))
 
 
 def get_exploration_rate(episode):
-    return 0.1
-    return max(0.1, 0.99999 ** (episode-222800))  # FIXME temp rate to give better board coverage
     return max(0.05, 0.9995 ** episode)  # gives flat .05 past 6,000 episodes
 
 
 # THE ENVIRONMENT FOR THE AGENT
 def run():
     weights_storage_path = "weights.h5"
-    episodes = 505000
+    episodes = 50000
 
-    discount_factor = 0.9  # aka gamma  # TODO try lower gamma (0.75)
+    discount_factor = 0.9  # gamma
 
     model = Model()
     if os.path.isfile(weights_storage_path):
@@ -123,52 +103,55 @@ def run():
 
     agent = Agent(model, discount_factor)
 
-    average_win_rate = 0
-    average_reward = 0
-    average_moves = 0
-    average_invalid_move_rate = 0
+    stat_batch_size = 10
+
+    stat_file = "stats.npy"
+    stat_data = np.zeros((int(episodes/stat_batch_size), 5))
+    if os.path.isfile(stat_file):
+        stat_data = np.load(stat_file)
+    stat_temp = np.zeros(5)  # loss, wins, reward, moves, invalid_rate
+
     last_verbose_epoch = int(time())
 
-    start_episode = 500000
+    start_episode = 1
     for episode in range(start_episode, episodes+1, 1):
         board = GameBoard(next_player=random.choice([PLAYER1, PLAYER2]))  # new game!
 
         exploration_rate = get_exploration_rate(episode)
 
         # play an episode
-        # total_reward, invalid_move = play_against_self(agent, board, exploration_rate)
         total_reward, invalid_move = play_against_random(agent, board, exploration_rate)
-        # have the agent learn a little
-        agent.learn(verbose=episode % 100 == 0)
 
-        average_win_rate *= 0.99
-        average_win_rate += 0.01 if board.has_won(PLAYER1) else 0
+        stat_temp[0] += agent.learn()
+        stat_temp[1] += 1 if board.has_won(PLAYER1) else 0
+        stat_temp[2] += total_reward
+        stat_temp[3] += board.total_moves/2
+        stat_temp[4] += 1 if invalid_move else 0
 
-        average_reward *= 0.99
-        average_reward += 0.01*total_reward
-
-        average_moves *= 0.99
-        average_moves += 0.01 * board.total_moves/2
-
-        average_invalid_move_rate *= 0.99
-        average_invalid_move_rate += 0.01 if invalid_move else 0
-
-        if episode % 100 == 0:
+        if episode % stat_batch_size == 0:
             model.save_weights(weights_storage_path)
-            board.print()
+
+            stat_temp /= stat_batch_size
+            stat_index = int(episode / stat_batch_size)-1  # batch indexing starts at 0
+            stat_data[stat_index] = stat_temp
+            stat_temp = np.zeros(5)
+            np.save(stat_file, stat_data)
+
             now = int(time())
-            time_delta = now-last_verbose_epoch
+            time_delta = now - last_verbose_epoch
             last_verbose_epoch = now
-            print("episode #%d - win rate: %d%% - epsilon: %.2f - avg reward: %d - avg moves: %d - invalid rate: %d%% - delta time: %dsec" %
-                  (episode,
-                   average_win_rate*100,
-                   exploration_rate,
-                   average_reward,
-                   average_moves,
-                   average_invalid_move_rate*100,
-                   time_delta
-                   )
-                  )
+
+            board.print()  # show the current EP board state
+
+            print("EP %d --- loss: %d, win: %d%%, reward: %d, moves: %d, invalid: %d%% --- time: %dsec" % (
+                episode,
+                stat_data[stat_index][0],
+                stat_data[stat_index][1]*100,
+                stat_data[stat_index][2],
+                stat_data[stat_index][3],
+                stat_data[stat_index][4]*100,
+                time_delta
+            ))
 
 
 def play_against_random(agent, board, exploration_rate):
@@ -179,36 +162,34 @@ def play_against_random(agent, board, exploration_rate):
     last_agent_from_state = None
     last_agent_move = None
 
-    last_random_move = None  # FIXME remove temp
-
     while len(board.get_available_columns()) > 0:
         # OPPONENT'S TURN
         if board.get_next_player() == PLAYER2:
-            if last_random_move in board.get_available_columns():
-                move = last_random_move
-            else:
-                last_random_move = move = random.choice(board.get_available_columns())
+            move = random.choice(board.get_available_columns())
             board.make_move(move)  # opponent makes random move
             if board.has_won(PLAYER2):
-                agent.process_feedback(last_agent_from_state, last_agent_move, None, -100, True)
+                agent.process_feedback(last_agent_from_state, last_agent_move, None, -100)
                 total_reward -= 100
+
                 # also, tell the agent that blocking the win would've been a good move!
                 if move != last_agent_move:
                     board = board.copy()
-                    board.undo_move()
-                    board.undo_move()
+                    board.undo_move()  # undo PLAYER2 win
+                    board.undo_move()  # undo whatever the agent did (last_agent_move)
                     from_state = board.to_array()
                     board.make_move(move)
+                    to_state = board.to_array()
                     if board.has_won(PLAYER1):  # even better, this move would've given a win!
-                        agent.process_feedback(from_state, move, board.to_array(), 100, True)
+                        agent.process_feedback(from_state, move, None, 100)
                     else:  # otherwise, give a good reward for the theoretical blocking of the opponent's win
-                        agent.process_feedback(from_state, move, board.to_array(), 95, False)
+                        agent.process_feedback(from_state, move, to_state, 95)
+
                 break  # loss - end episode
         # AGENT'S TURN
         else:
             from_state = board.to_array()
             move = agent.choose_move(from_state, exploration_rate)
-            reward = 1  # default reward for generic move
+            reward = -5  # default reward for generic move; discourages filling up the board to get small rewards
             game_over = False
 
             if not board.is_column_available(move):
@@ -221,7 +202,7 @@ def play_against_random(agent, board, exploration_rate):
                     reward = 100  # win! significant reward
                     game_over = True
 
-            agent.process_feedback(from_state, move, None if game_over else board.to_array(), reward, game_over)
+            agent.process_feedback(from_state, move, None if game_over else board.to_array(), reward)
 
             last_agent_from_state = from_state
             last_agent_move = move
@@ -288,11 +269,11 @@ def play_against_self(agent, board, exploration_rate):
                     board_copy.make_move(move)  # assume opponent chose this winning column instead
                     to_state2 = board_copy.to_array(perspective=other_player)
                     if board_copy.has_won(other_player):  # opponent would have won!
-                        agent.process_feedback(from_state2, move, None, 100, True)
+                        agent.process_feedback(from_state2, move, None, 100)
                     else:  # opponent would have blocked the win, which is way better than making a non-winning move
-                        agent.process_feedback(from_state2, move, to_state2, 95, False)
+                        agent.process_feedback(from_state2, move, to_state2, 95)
 
-        agent.process_feedback(from_state, move, None if game_over else to_state, reward, game_over)
+        agent.process_feedback(from_state, move, None if game_over else to_state, reward)
 
         last_move = move
         total_reward[currently_playing_as] += reward

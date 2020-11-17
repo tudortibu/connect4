@@ -52,8 +52,8 @@ class Agent:
         return np.argmax(predictions[0])  # pick the column with the highest value
 
     def learn(self, verbose):
-        self.learn_on(True, 20, verbose)  # less (but episode-proportionally more) terminal data
-        self.learn_on(False, 300, verbose)  # more non-terminal data
+        self.learn_on(True, 10, verbose)  # less (but episode-proportionally more) terminal data
+        self.learn_on(False, 50, verbose)  # more non-terminal data
 
     def learn_on(self, terminal_data, batch_size, verbose):
         data = self.memory_T if terminal_data else self.memory_NT
@@ -63,15 +63,18 @@ class Agent:
 
         from_states = np.zeros((batch_size, 42))
         moves = np.zeros(batch_size, dtype=np.int8)  # integers, [0-7)
-        to_states = np.zeros((batch_size, 42))  # unused if terminal_data == True
+        to_states = None if terminal_data else np.zeros((batch_size, 42))
         rewards = np.zeros(batch_size)
 
         for i in range(batch_size):
             from_state, move, to_state, reward = batch[i]
-            from_states[i] = from_state
+            from_states[i] = np.array([from_state])
             moves[i] = move
-            to_states[i] = to_state
+            if not terminal_data:
+                to_states[i] = to_state
             rewards[i] = reward
+        if terminal_data:
+            print(from_states)
 
         labels = self.model.predict(from_states)  # (batch_size, 7)
         # skipping the following calculation for terminal data, as it's not needed then
@@ -98,9 +101,7 @@ class Agent:
         """
         game_end: aka end of the _episode_; i.e. a win, loss, or draw
         """
-        from_state = np.array([from_state_array])
-        to_state = np.array([to_state_array]) if to_state_array is not None else None
-        data = (from_state, chosen_move, to_state, reward)
+        data = (from_state_array, chosen_move, to_state_array, reward)
         self.memory_T.append(data) if game_over else self.memory_NT.append(data)
 
 
@@ -113,7 +114,7 @@ def get_exploration_rate(episode):
 # THE ENVIRONMENT FOR THE AGENT
 def run():
     weights_storage_path = "weights.h5"
-    episodes = 505000
+    episodes = 5000
 
     discount_factor = 0.9  # aka gamma  # TODO try lower gamma (0.75)
 
@@ -129,7 +130,7 @@ def run():
     average_invalid_move_rate = 0
     last_verbose_epoch = int(time())
 
-    start_episode = 500000
+    start_episode = 0
     for episode in range(start_episode, episodes+1, 1):
         board = GameBoard(next_player=random.choice([PLAYER1, PLAYER2]))  # new game!
 
@@ -179,15 +180,10 @@ def play_against_random(agent, board, exploration_rate):
     last_agent_from_state = None
     last_agent_move = None
 
-    last_random_move = None  # FIXME remove temp
-
     while len(board.get_available_columns()) > 0:
         # OPPONENT'S TURN
         if board.get_next_player() == PLAYER2:
-            if last_random_move in board.get_available_columns():
-                move = last_random_move
-            else:
-                last_random_move = move = random.choice(board.get_available_columns())
+            move = random.choice(board.get_available_columns())
             board.make_move(move)  # opponent makes random move
             if board.has_won(PLAYER2):
                 agent.process_feedback(last_agent_from_state, last_agent_move, None, -100, True)
