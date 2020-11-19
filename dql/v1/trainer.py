@@ -29,7 +29,7 @@ class Model(models.Sequential):
         self.add(layers.Dense(7))
         self.compile(
             loss=losses.MeanSquaredError(),  # TODO play around with loss functions; https://stats.stackexchange.com/a/234578
-            optimizer=optimizers.Adam(lr=0.0001)  # TODO play around with optimizers % learning rate
+            optimizer=optimizers.Adam(lr=0.00001)  # TODO play around with optimizers % learning rate
         )
 
 
@@ -189,7 +189,7 @@ def play_against_random(agent, board, exploration_rate):
         else:
             from_state = board.to_array()
             move = agent.choose_move(from_state, exploration_rate)
-            reward = -5  # default reward for generic move; discourages filling up the board to get small rewards
+            reward = -5  # default reward for generic move; discourages filling up the board to get small rewards  # TODO make a training instance on this = -1
             game_over = False
 
             if not board.is_column_available(move):
@@ -245,7 +245,7 @@ def play_against_self(agent, board, exploration_rate):
                 move = test_move
             board.undo_move()
 
-        reward = -1  # default reward for generic move; discourages filling up the board to get small rewards
+        reward = -5  # default reward for generic move; discourages filling up the board to get small rewards
         game_over = False
         to_state = None
 
