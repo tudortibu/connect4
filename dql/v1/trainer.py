@@ -31,6 +31,34 @@ class Model(models.Sequential):
             loss=losses.MeanSquaredError(),  # TODO play around with loss functions; https://stats.stackexchange.com/a/234578
             optimizer=optimizers.Adam(lr=0.00001)  # TODO play around with optimizers % learning rate
         )
+        self.summary()
+
+
+class ConvolutionalModel(models.Sequential):
+    def __init__(self):
+        super().__init__()
+        self.add(layers.Reshape((7, 6, 1), input_dim=42))  # channels_last
+
+        self.add(layers.Conv2D(32, kernel_size=(4, 4), input_shape=(7, 6, 1), activation='relu'))  # TODO try odd kernel size e.g. (5,5)
+        self.add(layers.MaxPooling2D(pool_size=(2, 2)))  # TODO remove
+        self.add(layers.Dropout(rate=0.2))
+
+        # TODO diverge & combine multiple parallel convolution layers using functional api?
+
+        # self.add(layers.Conv2D(21, kernel_size=(4, 4), input_shape=(7, 6, 1), activation='relu'))
+        # self.add(layers.MaxPooling2D(pool_size=(2, 2)))
+        # self.add(layers.Dropout(rate=0.15))
+
+        self.add(layers.Flatten())
+        self.add(layers.Dense(42, activation='relu'))
+        self.add(layers.Dense(21, activation='relu'))
+        self.add(layers.Dense(7))
+
+        self.compile(
+            loss=losses.MeanSquaredError(),
+            optimizer=optimizers.Adam(lr=0.00001)
+        )
+        self.summary()
 
 
 class Agent:
@@ -97,7 +125,7 @@ def run():
 
     discount_factor = 0.9  # gamma
 
-    model = Model()
+    model = ConvolutionalModel()  # TODO take note of which model is being used
     if os.path.isfile(weights_storage_path):
         model.load_weights(weights_storage_path)
 
