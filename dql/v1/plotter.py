@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-ID = "stats_1"
+ID = "stats_conv1"
 
 stats = np.load(ID+".npy")
 
