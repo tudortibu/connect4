@@ -1,0 +1,6 @@
+stats_1   regular model w/ learning rate 0.0001
+stats_2   regular model w/ learning rate 0.00001
+stats_3   regular model w/ learning rate 0.001
+
+stats_conv1   conv model 4x4, max pooling, 32 output size
+stats_conv2   conv model 5x5, 64 output size

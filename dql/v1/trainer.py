@@ -39,8 +39,8 @@ class ConvolutionalModel(models.Sequential):
         super().__init__()
         self.add(layers.Reshape((7, 6, 1), input_dim=42))  # channels_last
 
-        self.add(layers.Conv2D(32, kernel_size=(4, 4), input_shape=(7, 6, 1), activation='relu'))  # TODO try odd kernel size e.g. (5,5)
-        self.add(layers.MaxPooling2D(pool_size=(2, 2)))  # TODO remove
+        self.add(layers.Conv2D(64, kernel_size=(5, 5), input_shape=(7, 6, 1), activation='relu'))
+        # self.add(layers.MaxPooling2D(pool_size=(2, 2)))
         self.add(layers.Dropout(rate=0.2))
 
         # TODO diverge & combine multiple parallel convolution layers using functional api?
@@ -65,7 +65,7 @@ class Agent:
     def __init__(self, model, discount_factor):
         self.model = model  # the brain itself
         self.discount_factor = discount_factor
-        self.feedback = deque(maxlen=50)
+        self.feedback = deque(maxlen=50)  # TODO try contracting/expanding this feedback buffer & evaluate affects?
 
     def choose_move(self, state_array, exploration_rate):
         """
@@ -120,7 +120,7 @@ def get_exploration_rate(episode):
 
 # THE ENVIRONMENT FOR THE AGENT
 def run():
-    weights_storage_path = "weights.h5"
+    weights_storage_path = "weights-conv.h5"
     episodes = 50000
 
     discount_factor = 0.9  # gamma
@@ -133,7 +133,7 @@ def run():
 
     stat_batch_size = 10
 
-    stat_file = "stats.npy"
+    stat_file = "stats-conv.npy"
     stat_data = np.zeros((int(episodes/stat_batch_size), 5))
     if os.path.isfile(stat_file):
         stat_data = np.load(stat_file)
