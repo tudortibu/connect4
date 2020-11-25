@@ -94,6 +94,22 @@ class GameBoard:
     def get_next_player(self):
         return PLAYER1 if self.player1_goes_next else PLAYER2
 
+    def is_blocking_move(self, move):
+        curr_player = self.get_next_player()
+        for test_move in self.get_available_columns():
+            if test_move != move:
+                self.make_move(test_move)  # assume this alternate move is made
+                if self.has_won(curr_player):
+                    self.undo_move()
+                    continue
+                opp_player = self.get_next_player()
+                self.make_move(move)  # and assume the opponent make the given move instead
+                blocking_move = self.has_won(opp_player)
+                self.undo_move()
+                self.undo_move()
+                return blocking_move  # no need to run the loop again, so just return
+        return False
+
     def make_move(self, col):
         if col < 0 or col >= 7:
             raise Exception("Invalid column: "+str(col))
