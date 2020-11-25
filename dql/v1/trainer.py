@@ -120,7 +120,7 @@ def get_exploration_rate(episode):
 
 # THE ENVIRONMENT FOR THE AGENT
 def run():
-    weights_storage_path = "weights-conv.h5"
+    weights_storage_path = "weights.h5"
     episodes = 50000
 
     discount_factor = 0.9  # gamma
@@ -133,11 +133,11 @@ def run():
 
     stat_batch_size = 10
 
-    stat_file = "stats-conv.npy"
-    stat_data = np.zeros((int(episodes/stat_batch_size), 5))
+    stat_file = "stats.npy"
+    stat_data = np.zeros((int(episodes/stat_batch_size), 6))
     if os.path.isfile(stat_file):
         stat_data = np.load(stat_file)
-    stat_temp = np.zeros(5)  # loss, wins, reward, moves, invalid_rate
+    stat_temp = np.zeros(6)  # loss, win_rate, reward, moves, invalid_rate, draw_rate
 
     last_verbose_epoch = int(time())
 
@@ -155,6 +155,7 @@ def run():
         stat_temp[2] += total_reward
         stat_temp[3] += board.total_moves/2
         stat_temp[4] += 1 if invalid_move else 0
+        stat_temp[5] += 1 if not invalid_move and board.total_moves == 42 else 0
 
         if episode % stat_batch_size == 0:
             model.save_weights(weights_storage_path)
@@ -162,7 +163,7 @@ def run():
             stat_temp /= stat_batch_size
             stat_index = int(episode / stat_batch_size)-1  # batch indexing starts at 0
             stat_data[stat_index] = stat_temp
-            stat_temp = np.zeros(5)
+            stat_temp = np.zeros(6)
             np.save(stat_file, stat_data)
 
             now = int(time())
