@@ -242,6 +242,104 @@ def play_against_random(agent, board, exploration_rate):
     return total_reward, invalid_move
 
 
+def play_against_smart_adversary(agent, board, exploration_rate):
+
+    total_reward = 0
+    invalid_move = False
+
+    while len(board.get_available_columns()) > 0:
+        # ADVERSARY'S TURN
+        if board.get_next_player() == PLAYER2:
+            move = random.choice(board.get_available_columns())
+
+            # smart logic
+            if board.total_moves >= 6:
+                blocking_move_check_count = 0
+
+                for test_move in board.get_available_columns():
+                    board.make_move(test_move)  # test this move
+
+                    if board.has_won(PLAYER2):
+                        move = test_move  # make this winning move (1st priority)
+                        board.undo_move()
+                        break
+
+                    # there is no point to run the following nested loop more than twice
+                    if blocking_move_check_count < 2:
+                        blocking_move_check_count += 1
+                        for test_agent_move in board.get_available_columns():
+                            if test_move != test_agent_move:
+                                board.make_move(test_agent_move)  # assume agent makes this move
+
+                                if board.has_won(PLAYER1):  # the agent would win!
+                                    move = test_agent_move  # block the agent from winning (2nd priority)
+                                    board.undo_move()
+                                    break
+
+                                board.undo_move()
+
+                    board.undo_move()
+
+            board.make_move(move)
+            if board.has_won(PLAYER2):
+                break  # loss - end episode
+        # AGENT'S TURN
+        else:
+            from_state = board.to_array()
+            move = agent.choose_move(from_state, exploration_rate)
+            reward = -1  # default reward for generic move
+            game_over = False
+
+            # help the agent learn to win/block in the future; give feedback on missed opportunities
+            for test_move in board.get_available_columns():
+                if test_move != move:
+                    # test for blocking move
+                    if board.is_blocking_move(test_move):
+                        board.make_move(test_move)
+                        agent.process_feedback(from_state, test_move, board.to_array(), 95)
+                        board.undo_move()
+                    # test for winning move
+                    else:
+                        board.make_move(test_move)
+                        if board.has_won(PLAYER1):
+                            agent.process_feedback(from_state, test_move, None, 100)
+                        board.undo_move()
+
+            if not board.is_column_available(move):
+                reward = -200  # invalid move! hard penalty
+                game_over = True
+                invalid_move = True
+            else:
+                board.make_move(move)  # move is valid, do it
+                if board.has_won(PLAYER1):
+                    reward = 100  # win! significant reward
+                    game_over = True
+                else:
+                    # check for losing/bad move
+                    for test_move in board.get_available_columns():
+                        board.make_move(test_move)
+                        if board.has_won(PLAYER2):
+                            reward = -100  # the agent's move allows the adversary to win; give high penalty
+                            board.undo_move()
+                            break
+                        board.undo_move()
+                    # check for blocking/good move (only if not losing move)
+                    if reward != -100 and len(board.get_available_columns()) > 0:
+                        board.undo_move()  # temporarily undo the move
+                        if board.is_blocking_move(move):
+                            reward = 95  # the agent blocked the adversary from winning; give high reward
+                        board.make_move(move)  # restore the move
+
+            agent.process_feedback(from_state, move, None if game_over else board.to_array(), reward)
+
+            total_reward += reward
+
+            if game_over:
+                break
+
+    return total_reward, invalid_move
+
+
 def play_against_self(agent, board, exploration_rate):
 
     total_reward = {PLAYER1: 0, PLAYER2: 0}
