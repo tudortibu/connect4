@@ -5,3 +5,7 @@ stats_3   regular model w/ learning rate 0.001
 stats_conv1   conv model 4x4, max pooling, 32 output size
 stats_conv2   conv model 5x5, 64 output size
 stats_conv3   same as above, just with tweaked learning system
+
+stats_smart1    conv model 5x5, 256 output size, more layers & dropout, 0.00001 lr, SMART adversary
+stats_smart2    beefy regular dense model, 0.0001 lr, SMARTer adversary
+stats_smart3    conv model 5x5, 256 output size, more layers & (spatial)dropout, 0.0001 lr, SMARTer adversary

@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-ID = "stats_conv1"
+ID = "stats_smart3"
 
 stats = np.load(ID+".npy")
 
@@ -20,9 +20,11 @@ loss.set_xlabel("Episode")
 loss.set_ylabel("Loss")
 loss.set_ylim(0, 1000)
 
-win_rate.set_title("Win vs Opponent Win vs Invalid Move")
+# win_rate.set_title("Win vs Opponent Win vs Invalid Move")
+win_rate.set_title("Episode Ending Distribution")
 win_rate.plot(x_axis, stats[:, 1]*100, "g", label="Agent Win")
-win_rate.plot(x_axis, (np.ones(stats.shape[0])-stats[:, 1]-stats[:, 4])*100, "orange", label="Opponent Win")
+win_rate.plot(x_axis, (np.ones(stats.shape[0])-stats[:, 1]-stats[:, 4]-stats[:, 5])*100, "orange", label="Opponent Win")
+win_rate.plot(x_axis, stats[:, 5]*100, "b", label="Draw")
 win_rate.plot(x_axis, stats[:, 4]*100, "red", label="Invalid Move")
 win_rate.set_xlabel("Episode")
 win_rate.set_ylabel("% Percent")
