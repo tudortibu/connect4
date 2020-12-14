@@ -1,10 +1,7 @@
 import utility as util
 from sklearn.model_selection import cross_val_score
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.tree import export_graphviz
-from sklearn import tree as t
-import graphviz
-import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score
 
 def main(train_path,  test_path):
 
@@ -17,8 +14,4 @@ def main(train_path,  test_path):
     #t.plot_tree(tree, filled=True)
     #fig.savefig('plot.png')
     pred_tree_prob = tree.predict(test_x)
-
-    for i in range(len(test_t)):
-        print(f"Predicted Decision Tree value: {pred_tree_prob[i]} True Value: {test_t[i]}")
-
-main("Connect4_Data/8-ply Moves/connect-4-clean-train.csv", "Connect4_Data/8-ply Moves/connect-4-clean-test.csv")
+    return accuracy_score(test_t, pred_tree_prob)

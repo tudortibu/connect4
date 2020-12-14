@@ -49,16 +49,8 @@ def print_data_boards(csv_path, label_col='class'):
 
 
     for line in data:
-        print(line[:42])
-        b = line[:42].reshape((7,6))
-        print(b)
-        bb = np.rot90(b)
-        print(bb)
-        bb = np.rot90(bb)
-        print(bb)
-        bb = np.rot90(bb)
-        print(bb)
-        board = c4.GameBoard(bb)
+        print(line[-1])
+        board = c4.GameBoard(line[:42])
         print(board)
         print()
 
